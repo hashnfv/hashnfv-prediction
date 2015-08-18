@@ -44,6 +44,29 @@ Monasca is an open-source monitoring-as-a-service (MONaaS) solution that integra
 
     - Monasca does not support querying memory usage of Libvirt.
 
+4.2 Heat
+--------
+
+Heat is an orchestration project of openstack. It can be used for deploy application. Its cfn-hup tool can monitor metadata in VM and notify to heat. But this function is poor now, we can extend cfn-hup to collect more information inside VM and make failure prediction.
+
+4.2.1 Cfn-hup
+^^^^^^^^^^^^^
+
+* Type: 'monitoring issue'
+* Description:
+
+  + To-be
+
+    - Cfn-hup is able to collect more metrics than metadata inside VM. These metrics can be used for failure prediction.
+
+  + As-is:
+
+    - Cfn-hup just can monitor metadata inside VM.
+
+  + Gap
+
+    - Cfn-hup should monitor more information inside VM.
+
 **Documentation tracking**
 
 Revision: _sha1
