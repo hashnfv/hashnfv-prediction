@@ -21,15 +21,16 @@ Collect the wanted data by using ceilometer client to send HTTP request to
 ceilometer server
 """
 
-
 # Import modules
-from os import environ as env
 import subprocess
 import ceilometerclient.client
 import json
+import readline  # It automatically wraps studin
 
 # First source openrc * *; Otherwise, there is a error message.
-source = 'source /opt/stack/devstack/openrc admin admin'
+print "source your openrc file, for example, source /opt/stack/devstack/openrc",
+print "admin admin"
+source = raw_input(">  ")
 dumps = '/usr/bin/python -c '\
       + '"import os, json; print json.dumps(dict(os.environ))"'
 command = ['/bin/bash', '-c', source + '&&' + dumps]
@@ -46,81 +47,96 @@ c_client = ceilometerclient.client.get_client(
 
 resource_list = c_client.resources.list()
 resource_id_list = []
-print 'List resource ids based on query filter================='
+print '\nList all resource ids which can be measured:'
+index = 0
 for each in resource_list:
-    print each.resource_id
+    print "\t* resource_id_list[%d]: " % index, each.resource_id
+    index += 1
     resource_id_list.append(each.resource_id)
-print 'End==================\n'
+print 'End', '=' * 15
 
-# resource_id_list[0:3]: image id
-# resource_id_list[3]: instance id
-# resource_id_list[4:6]: disk id
-# resource_id_list[6]: interface id
-query_meter = [dict(field='resource_id', op='eq', value=resource_id_list[3])]
+print "\nThe following shows resources corresponding to resource ids: \n\
+\t* resource_id_list[0:3] represents image ids \n \
+\t* resource_id_list[3] represents instance ids \n \
+\t* resource_id_list[4:6] represents disk ids \n \
+\t* resource_id_list[6] represents interface ids \n \
+So you can collect what kind of data you like. Just type the number \
+from 0 to 6"
+input_number = int(raw_input("> Please type the number: "))
+resource_id = resource_id_list[input_number]
+
+query_meter = [dict(field='resource_id', op='eq', value=resource_id)]
 meter_list = c_client.meters.list(q=query_meter)
 meter_name_list = []
-print 'List meter names related with the resource id--', resource_id_list[3]
+print '\nList meter names related with the resource id--' + resource_id + ":"
 for each in meter_list:
-    print each.name
+    print "\t-", each.name
     meter_name_list.append(each.name)
-print 'End++++++++++++++++++++\n'
+print 'End', '+' * 15
 
-compute_instances = [
-    'disk.read.requests.rate', 'disk.write.requests.rate',
-    'disk.read.bytes.rate', 'disk.write.bytes.rate', 'cpu_util'
-]
+print "\nYou can collect whatever meters you like just by typing the meter \
+names and using ',' as the separator,\n e.g., disk.read.requests.rate, \
+disk.write.requests.rate, disk.read.bytes.rate, \
+disk.write.bytes.rate, cpu_util."
 
-compute_instance_samples = []
-for each in compute_instances:
+try:
+    input_meters = raw_input(">  ")
+    collect_meters = input_meters.split(",")
+    collect_meters = [meter.strip() for meter in collect_meters]
+except EOFError:
+    print "\n Good Bye! Welcome again next time!"
+
+
+collect_meter_samples = []
+print "At the same time, you need to specify the beginning time and the \
+end time for the collection. \nThe time format is fixed, \
+e.g., 2016-02-28T00:00:00. "
+begin_time = raw_input("> Please input the beginning time: ")
+end_time = raw_input("> Please input the end time: ")
+for each in collect_meters:
     query = [
-        dict(field='resource_id', op='eq', value=resource_id_list[3]),
-        dict(field='timestamp', op='ge', value='2016-02-28T00:00:00'),
-        dict(field='timestamp', op='lt', value='2016-02-29T00:00:00'),
+        dict(field='resource_id', op='eq', value=resource_id),
+        dict(field='timestamp', op='ge', value=begin_time),
+        dict(field='timestamp', op='lt', value=end_time),
         dict(field='meter', op='eq', value=each)
     ]
-    compute_instance_samples.\
+    collect_meter_samples.\
         append(c_client.new_samples.list(q=query, limit=1000))
 #        append(c_client.samples.list(each, limit=1000))
 
 
-fout = open('instance_samples.arff', 'w')
-head_info = "% ARFF file for the collected instance samples" \
+fout = open('collectMeterSamples.arff', 'w')
+head_info = "% ARFF file for the collected meter sampleh" \
           + " with some numeric feature from ceilometer API. \n \n" \
           + "@relation    collected samples for VMs on host \n \n" \
-          + "@attribute timestample     datetime       " \
-          + " UTC date and time when the measurement was made  \n" \
-          + "@attribute resource_id      unicode       " \
-          + " The ID of the Resource for which the measurements are taken  \n" \
-          + "@attribute disk.read.requests.rate     request/s         " \
-          + "Average rate of read requests  \n" \
-          + "@attribute disk.write.requests.rate     request/s         " \
-          + "Average rate of write requests  \n" \
-          + "@attribute disk.read.bytes.rate     B/s         " \
-          + "Average rate of reads     \n" \
-          + "@attribute disk.write.bytes.rate     B/s         " \
-          + "Average rate of writes  \n" \
-          + "@attribute cpu_util      %        Average CPU utilization\n \n"\
-          + "@data \n \n"
+          + "@attribute timestample   \n" \
+          + "@attribute resource id   \n "
+
+for each in collect_meters:
+    head_info = head_info + "@attribute " + each + "\n"
+
+head_info = head_info + "@data \n \n"
 fout.write(head_info)
 
 count = 0
-compute_instance_sample_value = []
-for each in compute_instance_samples[1:]:
+collect_meter_sample_values = []
+for each in collect_meter_samples[1:]:
     each_sample_value = []
     for i in each:
         # each_sample_value.append(str(i.counter_volume))
         each_sample_value.append(str(i.volume))
-    compute_instance_sample_value.append(each_sample_value)
+    collect_meter_sample_values.append(each_sample_value)
 
-for each in compute_instance_samples[0]:
+for each in collect_meter_samples[0]:
     fout.write(each.timestamp + ', ' + each.resource_id)
     # fout.write(', ' + str(each.counter_volume))
     fout.write(', ' + str(each.volume))
-    for i in compute_instance_sample_value:
+    for i in collect_meter_sample_values:
         fout.write(', ' + i[count])
     fout.write('\n')
     count += 1
 
-
 fout.close()
-print count
+print "\nGreat! Collection is done. \n%d rows of meter samples have been \
+written in the file named 'collectMeterSamples.arff' in your current \
+directory. \nPlease check!" % count
