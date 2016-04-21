@@ -1,0 +1,5 @@
+data/harddrive1/ZeroR_ROC.arff
+mathexpression -E ifelse(a4>168,0,1) -V -R 63
+numerictonominal -R 63
+classassigner -C 64
+
