@@ -1,0 +1,12 @@
+$def with (count)
+
+$if count:
+    <h2>Well done! Collection is completed.</h2>
+    <h2><em style="color: green;">$count</em> rows of meter samples have been written in the file named "collectMeterSamples.arff" in your current directory.</h2>
+    <h2>Please check!</h2>
+$else:
+    <h2><em>That's too bad! The meter samples are not successfully generated. Please try again!</em></h2>
+
+<form action="/" method="GET">
+  <button style="color: blue; font-size: 2em;" type="submit">Try again!</button>
+</form>
