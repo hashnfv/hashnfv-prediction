@@ -28,11 +28,11 @@ import json
 import readline  # It automatically wraps studin
 
 # First source openrc * *; Otherwise, there is a error message.
-print "source your openrc file, for example, source /opt/stack/devstack/openrc",
-print "admin admin"
+print ("source your openrc file, for example, "
+       "source /opt/stack/devstack/openrc admin admin")
 source = raw_input(">  ")
-dumps = '/usr/bin/python -c '\
-      + '"import os, json; print json.dumps(dict(os.environ))"'
+dumps = ('/usr/bin/python -c '
+         '"import os, json; print json.dumps(dict(os.environ))"')
 command = ['/bin/bash', '-c', source + '&&' + dumps]
 pipe = subprocess.Popen(command, stdout=subprocess.PIPE)
 env = json.loads(pipe.stdout.read())
@@ -55,13 +55,13 @@ for each in resource_list:
     resource_id_list.append(each.resource_id)
 print 'End', '=' * 15
 
-print "\nThe following shows resources corresponding to resource ids: \n\
-\t* resource_id_list[0:3] represents image ids \n \
-\t* resource_id_list[3] represents instance ids \n \
-\t* resource_id_list[4:6] represents disk ids \n \
-\t* resource_id_list[6] represents interface ids \n \
-So you can collect what kind of data you like. Just type the number \
-from 0 to 6"
+print ("\nThe following shows resources corresponding to resource ids: \n"
+       "\t* resource_id_list[0:3] represents image ids \n"
+       "\t* resource_id_list[3] represents instance ids \n"
+       "\t* resource_id_list[4:6] represents disk ids \n"
+       "\t* resource_id_list[6] represents interface ids \n"
+       "So you can collect what kind of data you like. Just type the number "
+       "from 0 to 6")
 input_number = int(raw_input("> Please type the number: "))
 resource_id = resource_id_list[input_number]
 
@@ -74,10 +74,10 @@ for each in meter_list:
     meter_name_list.append(each.name)
 print 'End', '+' * 15
 
-print "\nYou can collect whatever meters you like just by typing the meter \
-names and using ',' as the separator,\n e.g., disk.read.requests.rate, \
-disk.write.requests.rate, disk.read.bytes.rate, \
-disk.write.bytes.rate, cpu_util."
+print ("\nYou can collect whatever meters you like just by typing the meter "
+       "names and using ',' as the separator,\n e.g., disk.read.requests.rate, "
+       "disk.write.requests.rate, disk.read.bytes.rate, "
+       "disk.write.bytes.rate, cpu_util.")
 
 try:
     input_meters = raw_input(">  ")
@@ -88,9 +88,9 @@ except EOFError:
 
 
 collect_meter_samples = []
-print "At the same time, you need to specify the beginning time and the \
-end time for the collection. \nThe time format is fixed, \
-e.g., 2016-02-28T00:00:00. "
+print ("At the same time, you need to specify the beginning time and the "
+       "end time for the collection. \nThe time format is fixed, "
+       "e.g., 2016-02-28T00:00:00. ")
 begin_time = raw_input("> Please input the beginning time: ")
 end_time = raw_input("> Please input the end time: ")
 for each in collect_meters:
@@ -100,17 +100,18 @@ for each in collect_meters:
         dict(field='timestamp', op='lt', value=end_time),
         dict(field='meter', op='eq', value=each)
     ]
-    collect_meter_samples.\
-        append(c_client.new_samples.list(q=query, limit=1000))
-#        append(c_client.samples.list(each, limit=1000))
-
+#    (collect_meter_samples.
+#        append(c_client.new_samples.list(q=query, limit=1000)))
+    jsonData = c_client.new_samples.list(q=query, limit=1000)
+    collect_meter_samples.append(i for i in jsonData)
+#        append(c_client.samples.list(q=query, limit=1000)))
 
 fout = open('collectMeterSamples.arff', 'w')
-head_info = "% ARFF file for the collected meter sampleh" \
-          + " with some numeric feature from ceilometer API. \n \n" \
-          + "@relation    collected samples for VMs on host \n \n" \
-          + "@attribute timestample   \n" \
-          + "@attribute resource id   \n "
+head_info = ("% ARFF file for the collected meter sample"
+             " with some numeric feature from ceilometer API. \n \n"
+             "@relation    collected samples for VMs on host \n \n"
+             "@attribute timestample   \n"
+             "@attribute resource id   \n ")
 
 for each in collect_meters:
     head_info = head_info + "@attribute " + each + "\n"
@@ -137,6 +138,6 @@ for each in collect_meter_samples[0]:
     count += 1
 
 fout.close()
-print "\nGreat! Collection is done. \n%d rows of meter samples have been \
-written in the file named 'collectMeterSamples.arff' in your current \
-directory. \nPlease check!" % count
+print ("\nGreat! Collection is done. \n%d rows of meter samples have been "
+       "written in the file named 'collectMeterSamples.arff' in your current"
+       " directory. \nPlease check!" % count)
