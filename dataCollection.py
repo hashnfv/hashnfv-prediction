@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 # Copyright 2016 Huawei Technologies Co. Ltd.
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
@@ -106,38 +107,37 @@ for each in collect_meters:
     collect_meter_samples.append(i for i in jsonData)
 #        append(c_client.samples.list(q=query, limit=1000)))
 
-fout = open('collectMeterSamples.arff', 'w')
-head_info = ("% ARFF file for the collected meter sample"
+part_info = ("% ARFF file for the collected meter sample"
              " with some numeric feature from ceilometer API. \n \n"
-             "@relation    collected samples for VMs on host \n \n"
-             "@attribute timestample   \n"
-             "@attribute resource id   \n ")
-
+             "@relation  collected samples for VMs on host \n \n"
+             "@attribute  timestample   \n"
+             "@attribute  resource id   \n")
+item_info = [part_info]
 for each in collect_meters:
-    head_info = head_info + "@attribute " + each + "\n"
+    item_info.append("@attribute  %s \n" % each)
+item_info.append("@data \n \n")
+head_info = ''.join(item_info)
 
-head_info = head_info + "@data \n \n"
-fout.write(head_info)
+with open('collectMeterSamples.arff', 'w') as fout:
+    fout.write(head_info)
+    collect_meter_sample_values = []
+    for each in collect_meter_samples[1:]:
+        # each_sample_value = (str(i.counter_volume) for i in each)
+        each_sample_value = (str(i.volume) for i in each)
+        collect_meter_sample_values.append(each_sample_value)
 
-count = 0
-collect_meter_sample_values = []
-for each in collect_meter_samples[1:]:
-    each_sample_value = []
-    for i in each:
-        # each_sample_value.append(str(i.counter_volume))
-        each_sample_value.append(str(i.volume))
-    collect_meter_sample_values.append(each_sample_value)
+    count = 0
+    for each in collect_meter_samples[0]:
+        fout.write("%s, %s" % (each.timestamp, each.resource_id))
+        # fout.write(', ' + str(each.counter_volume))
+        fout.write(', ' + str(each.volume))
+        for i in collect_meter_sample_values:
+            fout.write(', ' + i.next())
+        fout.write('\n')
+        count += 1
 
-for each in collect_meter_samples[0]:
-    fout.write(each.timestamp + ', ' + each.resource_id)
-    # fout.write(', ' + str(each.counter_volume))
-    fout.write(', ' + str(each.volume))
-    for i in collect_meter_sample_values:
-        fout.write(', ' + i[count])
-    fout.write('\n')
-    count += 1
-
-fout.close()
-print ("\nGreat! Collection is done. \n%d rows of meter samples have been "
-       "written in the file named 'collectMeterSamples.arff' in your current"
-       " directory. \nPlease check!" % count)
+    print (
+        "\nGreat! Collection is done. \n%d rows of meter samples have been "
+        "written in the file named 'collectMeterSamples.arff' in your current"
+        " directory. \nPlease check!" % count
+    )
