@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 # Copyright (c) 2016 Huawei
 # All Rights Reserved.
@@ -36,7 +36,8 @@ import csv
 import StringIO
 # import tempfile
 # from shutil import rmtree
-
+from pyspark.mllib.linalg import Vectors
+from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.classification import SVMWithSGD
 # from pyspark.mllib.classification import SVMModel
 from pyspark.mllib.classification import LogisticRegressionWithSGD
@@ -50,8 +51,6 @@ from pyspark.mllib.tree import RandomForest
 # from pyspark.mllib.tree import RandomForestModel
 from pyspark.mllib.tree import GradientBoostedTrees
 # from pyspark.mllib.tree import GradientBoostedTreesModel
-from pyspark.mllib.linalg import Vectors
-from pyspark.mllib.regression import LabeledPoint
 
 
 def loadRecord(line):
@@ -61,12 +60,13 @@ def loadRecord(line):
     parameters = reader.next()
     # Instances that were collected within seven days before the failures
     # are used to train the failing model
-    if parameters[3] >= 168:
-        parameters[-1] = 0
+    # if float(parameters[-1]) == 1 and float(parameters[3]) >= 360:
+    #    parameters[-1] = 0
     selectedParameters = (
         parameters[12:17] + parameters[19:20] + parameters[23:26] +
         parameters[39:47] + parameters[54:61] + parameters[62:]
     )
+    # selectedParameters = parameters
     return selectedParameters
 
 
@@ -86,11 +86,12 @@ if __name__ == "__main__":
             map(parseLine))
 
     print("===== Choose SVM model =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a SVM model
-    model = SVMWithSGD.train(trainingData, iterations=2)
+    model = SVMWithSGD.train(trainingData, iterations=200, regParam=7e-2,
+                             intercept=True)
 
     # Make prediction and test accuracy.
 #    labelsAndPredictions = (testData
@@ -99,78 +100,142 @@ if __name__ == "__main__":
 #        .filter(lambda (x, v): x == v).count() / float(testData.count()))
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
-    print("The test accuracy of SVM model is: %.4f\n\n" % accuracy)
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
+    print("The test accuracy of SVM model is: %.4f" % accuracy)
+    print("The test recall of SVM model is: %.4f" % recall)
+    print("The test fprate of SVM model is: %.4f\n\n" % fprate)
 
     print("===== Choose Logistic Regression model with SGD algorithm =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a logistic regression model
-    model = LogisticRegressionWithSGD.train(trainingData, iterations=3)
+    model = LogisticRegressionWithSGD.train(trainingData, iterations=200,
+                                            regParam=8e-2, intercept=True)
 
     # Make prediction and test accuracy.
+    print("The original threshold: %0.2f" % float(model.threshold))
+    model.setThreshold(0.40)
+    print("The current threshold: %0.2f" % float(model.threshold))
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
     print("The test accuracy of Logistic Regression model with"
-          " SGD algorithm is: %.4f\n\n" % accuracy)
+          " SGD algorithm is: %.4f" % accuracy)
+    print("The test recall of Logistic Regression model with"
+          " SGD algorithm is: %.4f" % recall)
+    print("The test fprate of Logistic Regression model with"
+          " SGD algorithm is: %.4f\n\n" % fprate)
 
     print("===== Choose Logistic Regression model with LBFGS algorithm =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a logistic regression model
-    model = LogisticRegressionWithLBFGS.train(trainingData)
+    model = LogisticRegressionWithLBFGS.train(trainingData, iterations=200,
+                                              regParam=7e-2, intercept=True)
 
     # Make prediction and test accuracy.
+    print("The original threshold: %0.2f" % float(model.threshold))
+    model.setThreshold(0.45)
+    print("The current threshold: %0.2f" % float(model.threshold))
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
     print("The test accuracy of Logistic Regression model with"
-          " LBFGS algorithm is: %.4f\n\n" % accuracy)
+          " LBFGS algorithm is: %.4f" % accuracy)
+    print("The test recall of Logistic Regression model with"
+          " LBFGS algorithm is: %.4f" % recall)
+    print("The test fprate of Logistic Regression model with"
+          " LBFGS algorithm is: %.4f\n\n" % fprate)
 
     print("===== Choose Multinomial Naive Bayes model =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a multinomial naive Bayes model given an RDD of LabeledPoint.
-    model = NaiveBayes.train(trainingData, 0.8)
+    model = NaiveBayes.train(trainingData, 7e-1)
 
     # Make prediction and test accuracy.
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
     print("The test accuracy of Multinomial Naive Bayes "
-          "is: %.4f\n\n" % accuracy)
+          "is: %.4f" % accuracy)
+    print("The test recall of Multinomial Naive Bayes "
+          "is: %.4f" % recall)
+    print("The test fprate of Multinomial Naive Bayes "
+          "is: %.4f\n\n" % fprate)
 
     print("===== Choose Decision Tree  model =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a decision tree model.
     # Empty categoricalFeaturesInfo indicates all features are continuous.
     model = DecisionTree.trainClassifier(trainingData, numClasses=2,
                                          categoricalFeaturesInfo={},
-                                         impurity='entropy', maxDepth=5,
+                                         impurity='entropy', maxDepth=4,
                                          maxBins=32)
-    print('Learned classification tree model:')
-    print(model.toDebugString())
+    # print('Learned classification tree model:')
+    # print(model.toDebugString())
 
     # Make prediction and test accuracy.
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
-    print("The test accuracy of decision tree model is: %.4f\n\n" % accuracy)
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
+    print("The test accuracy of decision tree model is: %.4f" % accuracy)
+    print("The test recall of decision tree model is: %.4f" % recall)
+    print("The test fprate of decision tree model is: %.4f\n\n" % fprate)
 
     print("===== Choose Random Forest model =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a Random Forest model.
     # Empty categoricalFeaturesInfo indicates all features are continuous.
@@ -178,42 +243,65 @@ if __name__ == "__main__":
     # Setting featureSubsetStrategy="auto" lets the algorithm choose.
     model = RandomForest.trainClassifier(trainingData, numClasses=2,
                                          categoricalFeaturesInfo={},
-                                         numTrees=3,
+                                         numTrees=15,
                                          featureSubsetStrategy="auto",
-                                         impurity='gini', maxDepth=7,
+                                         impurity='gini', maxDepth=12,
                                          maxBins=32)
-    print('Learned classification tree model:')
-    print(model.toDebugString())
+    # print('Learned classification tree model:')
+    # print(model.toDebugString())
 
     # Make prediction and test accuracy.
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
-    print("The test accuracy of random forest model is: %.4f\n\n" % accuracy)
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
+    print("The test accuracy of random forest model is: %.4f" % accuracy)
+    print("The test recall of random forest model is: %.4f" % recall)
+    print("The test fprate of random forest model is: %.4f\n\n" % fprate)
 
     print("===== Choose Gradient Boosted Trees model =====")
-    # Split data aproximately into training (60%) and test (40%)
-    trainingData, testData = data.randomSplit([0.6, 0.4], seed=0)
+    # Split data aproximately into training (80%) and test (20%)
+    trainingData, testData = data.randomSplit([0.8, 0.2], seed=0)
 
     # Train a GradientBoostedTrees model.
     # Empty categoricalFeaturesInfo indicates all features are continuous.
     model = GradientBoostedTrees.trainClassifier(trainingData,
                                                  categoricalFeaturesInfo={},
-                                                 numIterations=3, maxDepth=3,
+                                                 numIterations=20, maxDepth=8,
                                                  maxBins=32)
-    print('Learned classification tree model:')
-    print(model.toDebugString())
+    # print('Learned classification tree model:')
+    # print(model.toDebugString())
 
     # Make prediction and test accuracy.
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda p: p.label).zip(predictions)
+    tp = labelsAndPredictions.filter(lambda (v, p): v == p and p == 1).count()
+    tn = labelsAndPredictions.filter(lambda (v, p): v == p and p == 0).count()
+    fp = labelsAndPredictions.filter(lambda (v, p): v != p and p == 1).count()
+    fn = labelsAndPredictions.filter(lambda (v, p): v != p and p == 0).count()
     accuracy = (labelsAndPredictions.filter(lambda (v, p): v == p).
                 count() / float(testData.count()))
+    print("true positive number: %d, false positive number: %d" % (tp, fp))
+    print("false negative number: %d, true negative number: %d" % (fn, tn))
+    recall = tp / float(tp + fn)
+    fprate = fp / float(fp + tn)
     print("The test accuracy of Gradient Boosted Trees "
           "model is: %.4f" % accuracy)
+    print("The test recall of Gradient Boosted Trees "
+          "model is: %.4f" % recall)
+    print("The test fprate of Gradient Boosted Trees "
+          "model is: %.4f" % fprate)
 
-    # Save and load model
+
+# Save and load model
 #    path = tempfile.mkdtemp(dir='.')
 #    model.save(sc, path)
 #    sameModel = SVMModel.load(sc, path)
